@@ -2,17 +2,24 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const app = express()
 
+// API route port is set with 3001
 app.set('port', process.env.PORT || 3001)
+
+// This is used to parse the body in the request.
 var jsonParser = bodyParser.json()
+
 // Express only serves static assets in production
 if (process.env.NODE_ENV === 'production') {
     app.use(express.static('../build/static'))
 }
+
+// SQLite initialize part.
 const sqlite3 = require('sqlite3')
 const TransactionDatabase = require('sqlite3-transactions').TransactionDatabase
 const sqlite = sqlite3.verbose()
 const path = 'todoDB'
-const todoDB = new TransactionDatabase(new sqlite.Database(path + `sql`))
+// pass path and mode with ':memory:' for using sqlite as in-memory database.
+const todoDB = new TransactionDatabase(new sqlite.Database(path + `sql`, ':memory:'))
 todoDB.serialize(() => {
     todoDB.run(
         `CREATE TABLE IF NOT EXISTS todo_list(id INTEGER PRIMARY KEY AUTOINCREMENT,todo TEXT, created_date DATE, modified_date DATE, finished INTEGER NOT NULL DEFAULT 0);`
@@ -23,6 +30,7 @@ todoDB.serialize(() => {
     todoDB.run(`CREATE INDEX IF NOT EXISTS id ON todo_list(id);`)
 })
 
+// Get method
 app.get('/api/list', async (req, res) => {
     res.json(await getList())
 })
@@ -30,10 +38,14 @@ app.get('/api/finish/:id', async (req, res) => {
     res.json(await finish(req.params.id))
 })
 
+
+// Delete method
 app.delete('/api/delete', jsonParser, async (req, res) => {
     res.json(await delTodo(req.body.id))
 })
 
+
+// Post method
 app.post('/api/add', jsonParser, async (req, res) => {
     res.json(await addJob(req.body))
 })
@@ -41,12 +53,14 @@ app.post('/api/edit', jsonParser, async (req, res) => {
     res.json(await editJob(req.body))
 })
 
+// To process incoming requests to the API, start with the port value set at the upper.
 app.listen(app.get('port'), () => {
-    console.log(`Find the server at: http://localhost:${app.get('port')}/`) // eslint-disable-line no-console
+    console.log(`Find the server at: http://localhost:${app.get('port')}/`)
 })
 
 async function finish(id) {
     try {
+        // Before changing the state to finished, make sure that all the referenced todos are complete.
         const isFinished = await finishCheck(id)
         if (!isFinished) {
             return {
@@ -69,6 +83,7 @@ async function finish(id) {
     }
 }
 async function finishCheck(id) {
+    // The logic that checks to see if all the referencing tasks are done.
     const query =
         'SELECT todo_list.id, ref FROM todo_list LEFT JOIN reference ON todo_list.id = reference.id where todo_list.id = $id'
     const references = await get(query, { $id: id })
@@ -102,6 +117,7 @@ async function delTodo(id) {
             }
         }
         if (todo[0]['finished']) {
+            // If the todo to be deleted is referenced, delete the referencing data.
             await exec(`DELETE FROM todo_list WHERE id = $id`, [{ $id: id }])
             await exec(`DELETE FROM reference WHERE ref = $ref`, [{ $ref: id }])
             return true
@@ -139,6 +155,7 @@ async function getList() {
 }
 
 async function setReferences(todoList) {
+    // Logic to update the reference value on data loaded from an todo_list table.
     const query =
         'SELECT todo_list.id, ref FROM todo_list LEFT JOIN reference ON todo_list.id = reference.id where todo_list.id = $id'
     for (const todo of todoList) {
@@ -154,6 +171,7 @@ async function addJob(param) {
     try {
         for (const reference of param.references) {
             const check = await getTodoByID(reference)
+            // Query the todo by passed as reference and, if it does not exist, judge it as invalid.
             if (check.length === 0) {
                 return {
                     status: 400,
@@ -171,6 +189,10 @@ async function addJob(param) {
             $modified_date: Date.now()
         }
         await exec(insertSQL, [insertParam])
+
+        /* After inserting it into the todo_list table, 
+           retrieve the id of the most recently added row and 
+           using it when insert to the reference table. */
         const id = await getLastID()
         if (id === undefined) {
             return {
@@ -198,9 +220,20 @@ async function addJob(param) {
 async function editJob(param) {
     try {
         const id = param.id
+        const job = await getTodoByID(id)
+        // Query and check the existence of todo by id
+        if (job.length < 1) {
+            return {
+                status: 400,
+                timestamp: Date.now(),
+                error: 'BAD_REQUEST',
+                message: `The todo(${id}) you want to modify was not found in the database.`
+            }
+        }
         for (const reference of param.references) {
             const check = await getTodoByID(reference)
-            if (check.length === 0) {
+            // Query the todo by passed as reference and, if it does not exist, judge it as invalid.
+            if (check.length < 1) {
                 return {
                     status: 400,
                     timestamp: Date.now(),
@@ -208,11 +241,22 @@ async function editJob(param) {
                     message: `The ID(${reference}) of the referenced job does not exist.`
                 }
             }
+            // A todo that has already been completed can not refer to an incomplete todo.
+            if (job[0]['finished'] && !check[0]['finished']) {
+                return {
+                    status: 400,
+                    timestamp: Date.now(),
+                    error: 'BAD_REQUEST',
+                    message: `Completed todos can not reference incomplete todos.`
+                }
+            }
         }
+        // Modify data from todo_list table
         let updateSQL = 'update todo_list set todo = $todo, modified_date = $modified_date where id = $id'
         const modifiedDate = Date.now()
         await exec(updateSQL, [{ $id: id, $todo: param.todo, $modified_date: Date.now() }])
-        // 레퍼런스 잡 다 불러와서 삭제하고 다시 넣기
+
+        // To modify the reference, delete all references to the id and reinsert it.
         await exec(`DELETE FROM reference WHERE id = $id`, [{ $id: id }])
         await addReferences(id, param.references)
         return modifiedDate

@@ -43,7 +43,6 @@ app.delete('/api/delete', jsonParser, async (req, res) => {
     checkAndRespondJSON(res, await delTodo(req.body.id))
 })
 
-
 // Post method
 app.post('/api/add', jsonParser, async (req, res) => {
     checkAndRespondJSON(res, await addJob(req.body))
@@ -182,7 +181,6 @@ async function setReferences(todoList) {
 
 async function addJob(param) {
     try {
-        let refSet = new Set(param.references)
         for (const reference of param.references) {
             const check = await getTodoByID(reference)
             // Query the todo by passed as reference and, if it does not exist, judge it as invalid.
@@ -201,11 +199,6 @@ async function addJob(param) {
                     message: `You can not create a todo that references a completed todo(${reference}).`
                 }
             }
-            const path = await getRefPath(check[0]['id'], refSet)
-            if (path.error) {
-                return path
-            }
-            refSet = path
         }
         const insertSQL =
             'INSERT OR REPLACE INTO todo_list (todo, created_date, modified_date) VALUES ($todo, $created_date, $modified_date)'
@@ -276,6 +269,16 @@ async function editJob(param) {
                     message: `A completed todo can not be referenced by an incomplete todo.`
                 }
             }
+            const path = await getRefPath(check[0]['id'])
+            console.log(path)
+            if (path.has(id)) {
+                return {
+                    status: 400,
+                    timestamp: Date.now(),
+                    error: 'BAD_REQUEST',
+                    message: `You can not reference a to do circular reference.`
+                }
+            }
         }
         // Modify data from todo_list table
         let updateSQL = 'update todo_list set todo = $todo, modified_date = $modified_date where id = $id'
@@ -337,21 +340,15 @@ function get(query, param = {}) {
 }
 
 // To prevent circular references, verify with reference values.
-async function getRefPath(refID, refSet) {
+async function getRefPath(refID, refSet = new Set()) {
+    console.log(`refID: ${refID}`)
+    refSet.add(refID)
     const query = 'SELECT id, ref FROM reference where id = $id'
     const references = await get(query, { $id: refID })
     if (references.length < 1) {
         return refSet
     }
     for (const reference of references) {
-        if (refSet.has(reference['ref'])) {
-            return {
-                status: 400,
-                timestamp: Date.now(),
-                error: 'BAD_REQUEST',
-                message: `You can not reference a to do circular reference(ID:${reference['ref']}).`
-            }
-        }
         return getRefPath(reference['ref'], refSet)
     }
 }

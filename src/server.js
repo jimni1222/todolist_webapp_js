@@ -17,9 +17,8 @@ if (process.env.NODE_ENV === 'production') {
 const sqlite3 = require('sqlite3')
 const TransactionDatabase = require('sqlite3-transactions').TransactionDatabase
 const sqlite = sqlite3.verbose()
-const path = 'todoDB'
 // pass path and mode with ':memory:' for using sqlite as in-memory database.
-const todoDB = new TransactionDatabase(new sqlite.Database(path + `sql`, ':memory:'))
+const todoDB = new TransactionDatabase(new sqlite.Database(':memory:'))
 todoDB.serialize(() => {
     todoDB.run(
         `CREATE TABLE IF NOT EXISTS todo_list(id INTEGER PRIMARY KEY AUTOINCREMENT,todo TEXT, created_date DATE, modified_date DATE, finished INTEGER NOT NULL DEFAULT 0);`
@@ -32,25 +31,25 @@ todoDB.serialize(() => {
 
 // Get method
 app.get('/api/list', async (req, res) => {
-    res.json(await getList())
+    checkAndRespondJSON(res, await getList())
 })
 app.get('/api/finish/:id', async (req, res) => {
-    res.json(await finish(req.params.id))
+    checkAndRespondJSON(res, await finish(req.params.id))
 })
 
 
 // Delete method
 app.delete('/api/delete', jsonParser, async (req, res) => {
-    res.json(await delTodo(req.body.id))
+    checkAndRespondJSON(res, await delTodo(req.body.id))
 })
 
 
 // Post method
 app.post('/api/add', jsonParser, async (req, res) => {
-    res.json(await addJob(req.body))
+    checkAndRespondJSON(res, await addJob(req.body))
 })
 app.post('/api/edit', jsonParser, async (req, res) => {
-    res.json(await editJob(req.body))
+    checkAndRespondJSON(res, await editJob(req.body))
 })
 
 // To process incoming requests to the API, start with the port value set at the upper.
@@ -58,6 +57,20 @@ app.listen(app.get('port'), () => {
     console.log(`Find the server at: http://localhost:${app.get('port')}/`)
 })
 
+function checkAndRespondJSON(res, data) {
+    try {
+        res.status(200)
+        if (data.error) {
+            res.status(data.status)
+        }
+        res.json(data)
+        res.end()
+    } catch (e) {
+        res.status(503)
+        res.json({ error: `${e}` })
+        res.end()
+    }
+}
 async function finish(id) {
     try {
         // Before change the status of a job to finished, verify that all todos that reference the todo are complete.
@@ -363,3 +376,5 @@ function exec(query, params) {
         })
     })
 }
+
+module.exports = app; // for testing

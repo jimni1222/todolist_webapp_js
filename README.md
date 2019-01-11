@@ -18,6 +18,16 @@ Before running the web application, run the API server.<br>
 이 API 서버는 3001번 포트를 사용합니다.<br>
 The API server uses port 3001.
 
+
+### `npm run build`
+
+어플리케이션을 빌드합니다.<br>
+Build the application.
+
+빌드된 파일은 `build` 폴더에 저장됩니다.<br>
+The built files are stored in the `build` folder.
+
+
 ### `npm start`
 
 어플리케이션을 실행합니다.<br>

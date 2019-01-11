@@ -270,7 +270,6 @@ async function editJob(param) {
                 }
             }
             const path = await getRefPath(check[0]['id'])
-            console.log(path)
             if (path.has(id)) {
                 return {
                     status: 400,
@@ -341,7 +340,6 @@ function get(query, param = {}) {
 
 // To prevent circular references, verify with reference values.
 async function getRefPath(refID, refSet = new Set()) {
-    console.log(`refID: ${refID}`)
     refSet.add(refID)
     const query = 'SELECT id, ref FROM reference where id = $id'
     const references = await get(query, { $id: refID })

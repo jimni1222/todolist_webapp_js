@@ -1,5 +1,8 @@
 # Todo list web application (Using javascript)
 
+<iframe width="1026" height="564" src="https://www.youtube.com/embed/VGMER_JmS3s" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+
 자바스크립트를 사용하여 할 일 리스트 웹 어플리케이션을 구현한 프로젝트입니다.<br>
 Implement todo list web app with JS.
 

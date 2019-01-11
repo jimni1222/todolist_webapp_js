@@ -170,7 +170,6 @@ async function setReferences(todoList) {
 async function addJob(param) {
     try {
         let refSet = new Set(param.references)
-        console.log(refSet)
         for (const reference of param.references) {
             const check = await getTodoByID(reference)
             // Query the todo by passed as reference and, if it does not exist, judge it as invalid.
@@ -326,17 +325,12 @@ function get(query, param = {}) {
 
 // To prevent circular references, verify with reference values.
 async function getRefPath(refID, refSet) {
-    console.log(`getRefPath`)
-    console.log(refSet)
     const query = 'SELECT id, ref FROM reference where id = $id'
     const references = await get(query, { $id: refID })
     if (references.length < 1) {
         return refSet
     }
-    console.log(references)
     for (const reference of references) {
-        console.log(`reference['ref']`)
-        console.log(reference['ref'])
         if (refSet.has(reference['ref'])) {
             return {
                 status: 400,

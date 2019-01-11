@@ -60,14 +60,14 @@ app.listen(app.get('port'), () => {
 
 async function finish(id) {
     try {
-        // Before changing the state to finished, make sure that all the referenced todos are complete.
+        // Before change the status of a job to finished, verify that all todos that reference the todo are complete.
         const isFinished = await finishCheck(id)
         if (!isFinished) {
             return {
                 status: 400,
                 timestamp: Date.now(),
                 error: 'BAD_REQUEST',
-                message: `The referenced todo is not completed, and the todo can not be completed.`
+                message: `The todos that refer to that todo(${id}) must be completed before you can complete this todo(${id}).`
             }
         }
         const updateSQL = 'update todo_list set finished = 1 where id = $id'
@@ -85,11 +85,11 @@ async function finish(id) {
 async function finishCheck(id) {
     // The logic that checks to see if all the referencing tasks are done.
     const query =
-        'SELECT todo_list.id, ref FROM todo_list LEFT JOIN reference ON todo_list.id = reference.id where todo_list.id = $id'
-    const references = await get(query, { $id: id })
+        'SELECT todo_list.id, ref FROM todo_list LEFT JOIN reference ON todo_list.id = reference.id where reference.ref = $ref'
+    const references = await get(query, { $ref: id })
     for (const refer of references) {
         const query = 'SELECT finished FROM todo_list where id = $id'
-        const result = await get(query, { $id: refer['ref'] })
+        const result = await get(query, { $id: refer['id'] })
         if (result.length === 0) {
             return {
                 status: 503,
@@ -179,6 +179,13 @@ async function addJob(param) {
                     error: 'BAD_REQUEST',
                     message: `The ID(${reference}) of the referenced job does not exist.`
                 }
+            } else if (check[0]['finished']) {
+                return {
+                    status: 400,
+                    timestamp: Date.now(),
+                    error: 'BAD_REQUEST',
+                    message: `You can not create a todo that references a completed todo(${reference}).`
+                }
             }
         }
         const insertSQL =
@@ -238,16 +245,16 @@ async function editJob(param) {
                     status: 400,
                     timestamp: Date.now(),
                     error: 'BAD_REQUEST',
-                    message: `The ID(${reference}) of the referenced job does not exist.`
+                    message: `The ID(${reference}) of the referenced todo does not exist in DB.`
                 }
             }
-            // A todo that has already been completed can not refer to an incomplete todo.
-            if (job[0]['finished'] && !check[0]['finished']) {
+            // A completed todo can not be referenced by an incomplete todo.
+            if (!job[0]['finished'] && check[0]['finished']) {
                 return {
                     status: 400,
                     timestamp: Date.now(),
                     error: 'BAD_REQUEST',
-                    message: `Completed todos can not reference incomplete todos.`
+                    message: `A completed todo can not be referenced by an incomplete todo.`
                 }
             }
         }
